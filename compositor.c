@@ -32,8 +32,8 @@
 #define REPLACE_FLAG	0b0000000000000010		// if set replace buffer, otherwise mix
 #define MASK_FLAG		0b0000000000000100		// if set non-zero bytes are masked in
 #define HAS_DATA_FLAG	0b0000000000001000		// Set if there is data to render
-#define BRIGHTNESS_FLAG 0b1000000000000000		// Set the brightness in the lower 7 bits
-#define BRIGHTNESS_MASK 0b0000000001111111		// These are the bits used to determine brightness
+#define BRIGHTNESS_FLAG 0b1000000000000000		// Set the brightness in the following 7 bits
+#define BRIGHTNESS_MASK 0b0111111100000000		// These are the bits used to determine brightness
 
 
 uint8_t txbuf[NUM_BULBS * 3];	// Global frame buffer, allocate once
