@@ -19,7 +19,7 @@ The data is in the format of 52 lines, each 9 bytes in length (8 characters plus
 
 Flags - 24 bits of ASCII hex in format 0xHHHHHH
 
-'NEW_DATA_FLAG   0b0000000000000001		// True if this data is freshly received from pipe`
+`NEW_DATA_FLAG   0b0000000000000001		// True if this data is freshly received from pipe`
 `REPLACE_FLAG	0b0000000000000010		// if set replace buffer, otherwise mix`
 `MASK_FLAG		0b0000000000000100		// if set non-zero bytes are masked in`
 `HAS_DATA_FLAG	0b0000000000001000		// Set if there is data to render`
