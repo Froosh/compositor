@@ -110,7 +110,7 @@ int ln = 0;
 	pipebuf.flags |= (NEW_DATA_FLAG + HAS_DATA_FLAG);			// Set the new data flag
 	
 	// The next line is the process ID of the sending process, store it too
-	pipebuf.pid = strtoll(&read_message[(ln++ * LINE_SIZE)], NULL, 10);
+	pipebuf.pid = strtoll(&read_message[(ln++ * LINE_SIZE)], NULL, 16);
 
 	// And the next fifty lines are bulb values.  No, really.
 	for(j = 0, k = 0; j < NUM_BULBS; j++) {

@@ -122,7 +122,9 @@ class Holiday:
 			Which is then written out to the compositor FIFO pipe in a single go, 
 			So it should be reasonably fast."""
 			compositor_str = "0x010203\n"
-			compositor_str = compositor_str + "HolidayR\n"		# First two lines are placeholders for now, will be meaningful
+			pid_str = "0x%06x\n" % self.pid
+			#print pid_str
+			compositor_str = compositor_str + pid_str		# First two lines are placeholders for now, will be meaningful
 			ln = 0
 			while (ln < self.NUM_GLOBES):
 				tripval = (self.globes[ln][0] * 65536) + (self.globes[ln][1] * 256) + self.globes[ln][2]
@@ -146,6 +148,6 @@ if __name__ == '__main__':
 	while True:
 		hol.chase(direction=True)
 		hol.render()
-		time.sleep(.1)
+		time.sleep(.02)
 	hol.close_pipe()
 
