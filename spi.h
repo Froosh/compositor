@@ -1,4 +1,4 @@
-#ifdef OLIMEX
+#ifdef IMX
 #include "gpio-mmap.h"
 	// GPIO 0  = SSP2_MISO
 	// GPIO 16 = Arduino RESET
@@ -11,7 +11,7 @@
 #include <linux/spi/spidev.h>
 #endif
 
-#ifndef OLIMEX
+#ifndef IMX
 static const char *device = "/dev/spidev0.0";
 static uint32_t speed = 500000;
 static uint8_t mode;
@@ -30,7 +30,7 @@ static void pabort(const char *s)
 void spi_open()
 {
 	//printf("spi_openi\n");
-#ifdef OLIMEX
+#ifdef IMX
 	gpio_map();
 	GPIO_WRITE_PIN(16,1);
 	GPIO_WRITE_PIN(19,1);
@@ -90,7 +90,7 @@ void spi_open()
 
 void spi_close()
 {
-#ifndef OLIMEX
+#ifndef IMX
 	close(spi_fd);
 #endif
 }
@@ -99,7 +99,7 @@ static void spi_send(uint8_t txbuf[], int buffsize)
 {
 	//printf("spi_send\n");
 
-#ifdef OLIMEX
+#ifdef IMX
 	uint8_t i, j, v, b;
 
 	if (GPIO_READ_PIN(23)==0) return;  // Arduino still busy

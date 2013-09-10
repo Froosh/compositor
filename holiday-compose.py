@@ -24,7 +24,6 @@ class Holiday:
 	pid = os.getpid()
 
 	# To talk with the compositor
-	NUM_PIPES = 4			# Must be in sync with the value defined in compositor.c
 	NUM_LINES = 52
 
 	# Storage for all 50 globe values
@@ -50,7 +49,7 @@ class Holiday:
 			#	throw self.KeyboardInterrupt # Kinda vague, eh?
 			self.addr = addr
 		else:
-			self.open_free_pipe()
+			self.open_pipe()
 			if self.pipe_fd == -1:
 				"We could not open a pipe, this is not good."
 
@@ -93,19 +92,16 @@ class Holiday:
 		   Set the new start of the string to the color values"""
 		return
 
-	def open_free_pipe(self):
-		"""Walk through the pool of pipes and open the first available pipe"""
-		j = 0
-		while (j < self.NUM_PIPES):
-			pipename = "/run/pipelights.%0d.fifo" % j;
-			try:
-				self.pipe_fd = open(pipename, 'wb')
-				print("Successfully opened %s" % pipename)
-				return
-			except:
-				print "Have an exception, because it doesn't exist?"
-				self.pipe_fd = -1
-				j = j + 1 # Couldn't open this one, try the next one
+	def open_pipe(self):
+		"""Open the pipe"""
+		pipename = "/run/compose.fifo"
+		try:
+			self.pipe_fd = open(pipename, 'wb')
+			print("Successfully opened %s" % pipename)
+			return
+		except:
+			print "Have an exception, because it doesn't exist?"
+			self.pipe_fd = -1
 		return False	# Couldn't open any, so we failed
 
 	def close_pipe(self):
@@ -150,6 +146,6 @@ if __name__ == '__main__':
 	while True:
 		hol.chase(direction=True)
 		hol.render()
-		time.sleep(.02)
+		time.sleep(.1)
 	hol.close_pipe()
 

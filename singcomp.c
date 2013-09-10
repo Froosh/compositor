@@ -184,7 +184,7 @@ void set_pixel(int pixnum, uint8_t r, uint8_t g, uint8_t b) {
 int main(int argc, char *argv[])
 {
 	
-#ifdef OLIMEX
+#ifdef IMX
 	int retuid;
 	retuid = setuid(0);     // root me!
     if (retuid == -1) {
