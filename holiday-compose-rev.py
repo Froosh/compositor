@@ -143,13 +143,13 @@ if __name__ == '__main__':
 	hol = Holiday(remote=False)
 
 	# We're going to chase a light around, so set it up
-	hol.setglobe(0, 0x1f, 0x00, 0x00)
+	hol.setglobe(0, 0x1F, 0x00, 0x00)
 	hol.setglobe(1, 0x00, 0x1F, 0x00)
 	hol.setglobe(2, 0x00, 0x00, 0x1F)
 	hol.render()
 
 	while True:
-		hol.chase(direction=True)
+		hol.chase(direction=False)
 		hol.render()
 		time.sleep(.1)
 	hol.close_pipe()

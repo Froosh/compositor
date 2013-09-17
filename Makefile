@@ -5,6 +5,7 @@ compose: compose.c compose.h spi.h gpio-mmap.h
 	gcc compose.c -o compose -DIMX 
 	sudo chown root:root compose
 	sudo chmod 6711 compose
+	sudo rm /run/compose.fifo
 	
 compositor: compositor.c compositor.h spi.h gpio-mmap.h
 	gcc compositor.c -o compositor -DIMX 

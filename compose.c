@@ -23,7 +23,7 @@
 #include "spi.h"
 #include "compose.h"
 
-//#define NUM_PIPES 4
+#define NUM_BUFS 4			// We have four buffers to mix from
 #define LINE_SIZE 9			// 8 characters plus newline
 #define MESSAGE_SIZE ((NUM_BULBS + 2) * LINE_SIZE)
 
@@ -44,10 +44,11 @@ int pipe_fd;				// Pipe file descriptors
 struct pipe_data {
 	unsigned long flags;		// Various flags to control things and stuff
 	unsigned long pid;			// Number of process or app sending this data
+	time_t timestamp;	// When was the last time this buffer was written to?
 	uint8_t rgbbuf[(NUM_BULBS*3)];	// Storage for the bulb RGB values
 };
 
-struct pipe_data pipebuf;	// Storage for the pipe buffers
+struct pipe_data pipebuf[NUM_BUFS];	// Storage for the pipe buffers
 
 // Open the named pipe as given, return file descriptor to it
 // If the returned value is less than zero, it failed
@@ -87,13 +88,78 @@ int err;
 	return avail;
 }
 
+// Sum colour values, but peg at 0xff
+uint8_t sum_colors(c0, c1, c2, c3)
+{
+unsigned int res;
+	res = c0 + c1 + c2 + c3;
+	if (res > 0xff) {
+		res = 0xff;
+	}
+	return (uint8_t) res;
+}
+
+// The renderer is the heart of the compositor.
+// It will mix the buffers together IF the flags are set correctly
+// Otherwise it might do other sorts of things. Or something.
+void render(void) {
+int j, k;
+
+	// The first pass on the renderer
+	// All it does is sum the colour values
+	// When it pegs, it pegs.  It does not wrap.  Hopefully.
+	for(j = 0, k = 0; j < NUM_BULBS; j++) {
+		txbuf[k] = sum_colors(pipebuf[0].rgbbuf[k], pipebuf[1].rgbbuf[k], 
+			pipebuf[2].rgbbuf[k], pipebuf[3].rgbbuf[k]);
+		k++;
+		txbuf[k] = sum_colors(pipebuf[0].rgbbuf[k], pipebuf[1].rgbbuf[k], 
+			pipebuf[2].rgbbuf[k], pipebuf[3].rgbbuf[k]);
+		k++;
+		txbuf[k] = sum_colors(pipebuf[0].rgbbuf[k], pipebuf[1].rgbbuf[k], 
+			pipebuf[2].rgbbuf[k], pipebuf[3].rgbbuf[k]);
+		k++;
+	}
+
+	// And send it on its merry way
+	spi_send(txbuf, (NUM_BULBS*3));	
+}
+
+// Return an index to a pipebuf that has a matching PID
+int match_pid(unsigned long apid) {
+int j;
+
+	for (j=0; j < NUM_BUFS; j++) {
+		if (pipebuf[j].pid == apid) {
+			return j;
+		}
+	}
+	return -1;
+}
+
+// Return an index to the buffer with the oldest timestamp
+int oldest_buf(void) {
+int j;
+time_t oldtime = pipebuf[j].timestamp;
+int oldest = 0;
+
+	for (j=1; j < NUM_BUFS; j++) {	
+		if (pipebuf[j].timestamp < oldtime) {
+			oldest = j;
+			oldtime = pipebuf[j].timestamp;
+		}
+	}
+	return oldest;
+}
+
 int read_pipe(void) {
 int j, k;
+int dest_buf;
 char read_message[MESSAGE_SIZE];
 ssize_t bytes_read;
 unsigned long rawcolor;
 uint8_t r, g, b;
 int ln = 0;
+struct pipe_data read_data;
 
 	// Read an entire message in from the pipe and store it in the appropriate array thingy
 	// It should be in 52 lines. We hope.
@@ -106,11 +172,11 @@ int ln = 0;
 	// The first line is flags, we're just kind of glossing this for now.
 	//bytes_read = read(pipe_fd[index], read_string, (size_t) LINE_SIZE);
 	//read_string[bytes_read] = 0x00;		// Null terminate end of string
-	pipebuf.flags = strtoll(&read_message[(ln++ * LINE_SIZE)], NULL, 16);
-	pipebuf.flags |= (NEW_DATA_FLAG + HAS_DATA_FLAG);			// Set the new data flag
+	read_data.flags = strtoll(&read_message[(ln++ * LINE_SIZE)], NULL, 16);
+	read_data.flags |= (NEW_DATA_FLAG + HAS_DATA_FLAG);			// Set the new data flag
 	
 	// The next line is the process ID of the sending process, store it too
-	pipebuf.pid = strtoll(&read_message[(ln++ * LINE_SIZE)], NULL, 16);
+	read_data.pid = strtoll(&read_message[(ln++ * LINE_SIZE)], NULL, 16);
 
 	// And the next fifty lines are bulb values.  No, really.
 	for(j = 0, k = 0; j < NUM_BULBS; j++) {
@@ -121,28 +187,46 @@ int ln = 0;
  		b = rawcolor & 0xFF;
 
 		// Here we'll do something with the bytes we've read in.
-		pipebuf.rgbbuf[k++] = r;
-		pipebuf.rgbbuf[k++] = g;
-		pipebuf.rgbbuf[k++] = b;
+		read_data.rgbbuf[k++] = r;
+		read_data.rgbbuf[k++] = g;
+		read_data.rgbbuf[k++] = b;
 		//printf("Bulb %d has values %02X %02X %02X\n", j, r, g, b);
 	}
-	pipebuf.rgbbuf[k++] = 0x00;		// And null last 3 bytes
-	pipebuf.rgbbuf[k++] = 0x00;
-	pipebuf.rgbbuf[k++] = 0x00;
+	//read_data.rgbbuf[k++] = 0x00;		// And null last 3 bytes
+	//read_data.rgbbuf[k++] = 0x00;
+	//read_data.rgbbuf[k++] = 0x00;
+
+	// Now affix a timestamp to the buffer
+	read_data.timestamp = time(NULL);
 
 	//printf("Everything read in\n");
-}
 
-// The renderer is the heart of the compositor.
-// It will mix the buffers together IF the flags are set correctly
-// Otherwise it might do other sorts of things. Or something.
-void render() {
-int j, q, k;
-unsigned int ra[NUM_BULBS][3];		// The mixer array thingy
-int mixed = 0;						// Number mixed
+	// OK, now that the data has been read in, what do we do with it?
+	// If the PID matches an existing one, we copy the data to that buffer.
+	// If there are no matching PIDs, we overwrite the oldest buffer.
+	if ((dest_buf = match_pid(read_data.pid)) == -1) {
+		printf("Buffers full, going for oldest buffer.\n");
+		dest_buf = oldest_buf();
+	}
+	//printf("Destination buffer is %d\n", dest_buf);
 
-	// And send it on its merry way
-	spi_send(pipebuf.rgbbuf, (NUM_BULBS*3));		// Just for testing purposes
+	// Now copy it into the appropriate destination buffer.
+	memcpy(&pipebuf[(uint8_t) dest_buf], &read_data, sizeof(struct pipe_data));
+	//pipebuf[dest_buf].flags = read_data.flags;
+	//pipebuf[dest_buf].pid = read_data.pid;
+	//pipebuf[dest_buf].timestamp = read_data.timestamp;
+
+	// And the next fifty lines are bulb values.  No, really.
+	//for(j = 0, k = 0; j < NUM_BULBS; j++) {
+		// Copy the color values.
+	//	pipebuf[dest_buf].rgbbuf[k] = read_data.rgbbuf[k++];
+	//	pipebuf[dest_buf].rgbbuf[k] = read_data.rgbbuf[k++];
+	//	pipebuf[dest_buf].rgbbuf[k] = read_data.rgbbuf[k++];
+	//}	
+
+	// And render away!
+	render();
+
 }
 
 void set_pixel(int pixnum, uint8_t r, uint8_t g, uint8_t b) {
@@ -194,6 +278,11 @@ int main(int argc, char *argv[])
 		exit(pipe_fd);
 	}
 
+	// Clear all the buffers
+	for (j=0; j < NUM_BUFS; j++) {
+		memset(&pipebuf[j], 0x00, sizeof(struct pipe_data));
+	}
+
 	// Any given pipe has to have at least 9 * 52 bytes to read (8 chars plus newline by 52 lines)
 	// So let's just scan to see what's going on here
 	while (doing) {
@@ -201,10 +290,8 @@ int main(int argc, char *argv[])
 		if (avail >= MESSAGE_SIZE) {
 			//printf("Pipe %d has %d bytes to read\n", j, avail);
 			read_pipe();
-			render();
 		}
 		usleep(1000);
-		//render();	// Just for testing purposes
 	}
 
 	spi_close();
