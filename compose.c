@@ -32,6 +32,7 @@
 #define REPLACE_FLAG	0b0000000000000010		// if set replace buffer, otherwise mix
 #define MASK_FLAG		0b0000000000000100		// if set non-zero bytes are masked in
 #define HAS_DATA_FLAG	0b0000000000001000		// Set if there is data to render
+#define CLEAR_FLAG		0b0000000000010000		// Set if we clear all the buffers
 #define BRIGHTNESS_FLAG 0b1000000000000000		// Set the brightness in the following 7 bits
 #define BRIGHTNESS_MASK 0b0111111100000000		// These are the bits used to determine brightness
 
@@ -124,6 +125,17 @@ int j, k;
 	spi_send(txbuf, (NUM_BULBS*3));	
 }
 
+
+void clear_buffers(void) {
+int j;
+
+	// Clear all the buffers
+	for (j=0; j < NUM_BUFS; j++) {
+		memset(&pipebuf[j], 0x00, sizeof(struct pipe_data));
+	}
+	render();		// And start with black	
+}
+
 // Return an index to a pipebuf that has a matching PID
 int match_pid(unsigned long apid) {
 int j;
@@ -174,9 +186,10 @@ struct pipe_data read_data;
 	//read_string[bytes_read] = 0x00;		// Null terminate end of string
 	read_data.flags = strtoll(&read_message[(ln++ * LINE_SIZE)], NULL, 16);
 	read_data.flags |= (NEW_DATA_FLAG + HAS_DATA_FLAG);			// Set the new data flag
-	
+
 	// The next line is the process ID of the sending process, store it too
 	read_data.pid = strtoll(&read_message[(ln++ * LINE_SIZE)], NULL, 16);
+	//printf("Received buffer PID %d\n", read_data.pid);
 
 	// And the next fifty lines are bulb values.  No, really.
 	for(j = 0, k = 0; j < NUM_BULBS; j++) {
@@ -198,6 +211,13 @@ struct pipe_data read_data;
 
 	// Now affix a timestamp to the buffer
 	read_data.timestamp = time(NULL);
+
+	if (read_data.flags & CLEAR_FLAG) {
+		//printf("Clearing buffers\n");
+		for (j=0; j < NUM_BUFS; j++) {
+			memset(&pipebuf[j], 0x00, sizeof(struct pipe_data));
+		}
+	}
 
 	//printf("Everything read in\n");
 
@@ -278,10 +298,7 @@ int main(int argc, char *argv[])
 		exit(pipe_fd);
 	}
 
-	// Clear all the buffers
-	for (j=0; j < NUM_BUFS; j++) {
-		memset(&pipebuf[j], 0x00, sizeof(struct pipe_data));
-	}
+	clear_buffers();		// Clear the buffers
 
 	// Any given pipe has to have at least 9 * 52 bytes to read (8 chars plus newline by 52 lines)
 	// So let's just scan to see what's going on here
